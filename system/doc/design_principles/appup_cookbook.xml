@@ -4,7 +4,7 @@
 <chapter>
   <header>
     <copyright>
-      <year>2003</year><year>2013</year>
+      <year>2003</year><year>2014</year>
       <holder>Ericsson AB. All Rights Reserved.</holder>
     </copyright>
     <legalnotice>
@@ -267,7 +267,7 @@ system_code_change(Chs, _Module, _OldVsn, _Extra) ->
 ...
 
 init(_Args) ->
-    {ok, {{one_for_all, 1, 60}, ...}}.</code>
+    {ok, {#{strategy => one_for_all, ...}, ...}}.</code>
       <p>The file <c>ch_app.appup</c>:</p>
       <code type="none">
 {"2",

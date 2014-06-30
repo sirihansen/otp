@@ -53,18 +53,30 @@
     <title>Supervision Principles</title>
     <p>The supervisor is responsible for starting, stopping and
       monitoring its child processes. The basic idea of a supervisor is
-      that it should keep its child processes alive by restarting them
+      that it shall keep its child processes alive by restarting them
       when necessary.</p>
     <p>The children of a supervisor is defined as a list of
       <em>child specifications</em>. When the supervisor is started, the child
       processes are started in order from left to right according to
       this list. When the supervisor terminates, it first terminates
       its child processes in reversed start order, from right to left.</p>
-    <p>A supervisor can have one of the following <em>restart strategies</em>:</p>
+    <marker id="sup_flags"/>
+    <p>The properties of a supervisor is defined by the supervisor
+      flags. This is the type definition for the supervisor flags:
+    </p>
+    <pre>sup_flags() = #{strategy => strategy(),         % optional
+                intensity => non_neg_integer(), % optional
+                period => pos_integer()}        % optional
+      </pre>
+    <p>A supervisor can have one of the following <em>restart
+	strategies</em>, specified with the <c>strategy</c> key in the
+      above map:
+    </p>
     <list type="bulleted">
       <item>
         <p><c>one_for_one</c> - if one child process terminates and
-          should be restarted, only that child process is affected.</p>
+          should be restarted, only that child process is
+          affected. This is the default restart strategy.</p>
       </item>
       <item>
         <p><c>one_for_all</c> - if one child process terminates and
@@ -94,43 +106,48 @@
           instead the child specification identifier is used,
           <c>terminate_child/2</c> will return
           <c>{error,simple_one_for_one}</c>.</p>
-        <p>Because a <c>simple_one_for_one</c> supervisor could have many
-        children, it shuts them all down at same time. So, order in which they
-        are stopped is not defined. For the same reason, it could have an
-        overhead with regards to the <c>Shutdown</c> strategy.</p>
+        <p>Because a <c>simple_one_for_one</c> supervisor could have
+          many children, it shuts them all down asynchronously. This
+          means that the children will do their cleanup in parallel
+          and therefore the order in which they are stopped is not
+          defined.</p>
       </item>
     </list>
     <p>To prevent a supervisor from getting into an infinite loop of
-      child process terminations and restarts, a <em>maximum restart frequency</em>
-      is defined using two integer values <c>MaxR</c>
-      and <c>MaxT</c>. If more than <c>MaxR</c> restarts occur within
-      <c>MaxT</c> seconds, the supervisor terminates all child
-      processes and then itself.
+      child process terminations and restarts, a <em>maximum restart
+      frequency</em> is defined using two integer values specified
+      with the <c>intensity</c> and <c>period</c> keys in the above
+      map. Assuming the value <c>MaxR</c> for <c>intensity</c>
+      and <c>MaxT</c> for <c>period</c>, then if more than <c>MaxR</c>
+      restarts occur within <c>MaxT</c> seconds, the supervisor will
+      terminate all child processes and then itself. The default value
+      for the <c>intensity</c> is <c>1</c>, and the default value
+      for <c>period</c> is <c>5</c>.
     </p>
     <marker id="child_spec"/>
     <p>This is the type definition of a child specification:</p>
-    <pre>
-child_spec() = {Id,StartFunc,Restart,Shutdown,Type,Modules}
- Id = term()
- StartFunc = {M,F,A}
-  M = F = atom()
-  A = [term()]
- Restart = permanent | transient | temporary
- Shutdown = brutal_kill | int()>0 | infinity
- Type = worker | supervisor
- Modules = [Module] | dynamic
-  Module = atom()</pre>
+    <pre>child_spec() = #{name => child_id(),     % mandatory
+                 start => mfargs(),      % mandatory
+                 restart => restart(),   % optional
+                 shutdown => shutdown(), % optional
+                 type => worker(),       % optional
+                 modules => modules()}   % optional</pre>
+    <p>The tuple format is kept for backwards compatibility,
+      see <seealso marker="#type-child_spec">child_spec()</seealso>,
+      but the map is preferred.
+    </p>
     <list type="bulleted">
       <item>
-        <p><c>Id</c> is a name that is used to identify the child
+        <p><c>name</c> is a name that is used to identify the child
           specification internally by the supervisor.</p>
+	<p>The <c>name</c> key is mandatory.</p>
       </item>
       <item>
-        <p><c>StartFunc</c> defines the function call used to start
-          the child process. It should be a module-function-arguments
+        <p><c>start</c> defines the function call used to start the
+          child process. It must be a module-function-arguments
           tuple <c>{M,F,A}</c> used as <c>apply(M,F,A)</c>.</p>
         <p>The start function <em>must create and link to</em> the child
-          process, and should return <c>{ok,Child}</c> or
+          process, and must return <c>{ok,Child}</c> or
           <c>{ok,Child,Info}</c> where <c>Child</c> is the pid of
           the child process and <c>Info</c> an arbitrary term which is
           ignored by the supervisor.</p>
@@ -143,20 +160,23 @@ child_spec() = {Id,StartFunc,Restart,Shutdown,Type,Modules}
           error tuple <c>{error,Error}</c>.</p>
         <p>Note that the <c>start_link</c> functions of the different
           behaviour modules fulfill the above requirements.</p>
+	<p>The <c>start</c> key is mandatory.</p>
       </item>
       <item>
-        <p><c>Restart</c> defines when a terminated child process
-          should be restarted. A <c>permanent</c> child process should
-          always be restarted, a <c>temporary</c> child process should
+        <p><c>restart</c> defines when a terminated child process
+          shall be restarted. A <c>permanent</c> child process will
+          always be restarted, a <c>temporary</c> child process will
           never be restarted (even when the supervisor's restart strategy
           is <c>rest_for_one</c> or <c>one_for_all</c> and a sibling's
           death causes the temporary process to be terminated) and a
-          <c>transient</c> child process should be restarted only if
+          <c>transient</c> child process will be restarted only if
           it terminates abnormally, i.e. with another exit reason
           than <c>normal</c>, <c>shutdown</c> or <c>{shutdown,Term}</c>.</p>
+	<p>The <c>restart</c> key is optional. If it is not given, the
+	  default value <c>permanent</c> will be used.</p>
       </item>
       <item>
-        <p><c>Shutdown</c> defines how a child process should be
+        <p><c>shutdown</c> defines how a child process shall be
           terminated. <c>brutal_kill</c> means the child process will
           be unconditionally terminated using <c>exit(Child,kill)</c>.
           An integer timeout value means that the supervisor will tell
@@ -166,12 +186,12 @@ child_spec() = {Id,StartFunc,Restart,Shutdown,Type,Modules}
           no exit signal is received within the specified number of milliseconds,
           the child process is unconditionally terminated using
           <c>exit(Child,kill)</c>.</p>
-        <p>If the child process is another supervisor, <c>Shutdown</c>
+        <p>If the child process is another supervisor, the shutdown time
           should be set to <c>infinity</c> to give the subtree ample
           time to shutdown. It is also allowed to set it to <c>infinity</c>,
           if the child process is a worker.</p>
         <warning>
-          <p>Be careful by setting the <c>Shutdown</c> strategy to
+          <p>Be careful when setting the shutdown time to
           <c>infinity</c> when the child process is a worker. Because, in this
           situation, the termination of the supervision tree depends on the
           child process, it must be implemented in a safe way and its cleanup
@@ -180,21 +200,30 @@ child_spec() = {Id,StartFunc,Restart,Shutdown,Type,Modules}
         <p>Note that all child processes implemented using the standard
           OTP behavior modules automatically adhere to the shutdown
           protocol.</p>
+	<p>The <c>shutdown</c> key is optional. If it is not given,
+	  the default value <c>5000</c> will be used if the child is
+	  of type <c>worker</c> and <c>infinity</c> will be used if
+	  the child is of type <c>supervisor</c>.</p>
       </item>
       <item>
-        <p><c>Type</c> specifies if the child process is a supervisor or
+        <p><c>type</c> specifies if the child process is a supervisor or
           a worker.</p>
+	<p>The <c>type</c> key is optional. If it is not given, the
+	  default value <c>worker</c> will be used.</p>
       </item>
       <item>
-        <p><c>Modules</c> is used by the release handler during code
+        <p><c>modules</c> is used by the release handler during code
           replacement to determine which processes are using a certain
-          module. As a rule of thumb <c>Modules</c> should be a list
+          module. As a rule of thumb this should be a list
           with one element <c>[Module]</c>, where <c>Module</c> is
           the callback module, if the child process is a supervisor,
           gen_server or gen_fsm. If the child process is an event
           manager (gen_event) with a dynamic set of callback modules,
-          <c>Modules</c> should be <c>dynamic</c>. See <em>OTP Design Principles</em>
+          the value <c>dynamic</c> shall be used. See <em>OTP Design Principles</em>
           for more information about release handling.</p>
+	<p>The <c>modules</c> key is optional. If it is not given, it
+	  defaults to <c>[M]</c>, where <c>M</c> comes from the
+	  child's start <c>{M,F,A}</c></p>
       </item>
       <item>
         <p>Internally, the supervisor also keeps track of the pid
@@ -213,6 +242,9 @@ child_spec() = {Id,StartFunc,Restart,Shutdown,Type,Modules}
     </datatype>
     <datatype>
       <name name="child_spec"/>
+      <desc><p>The tuple format is kept for backwards compatibility
+	 only. A map is preferred as defined
+	 <seealso marker="#child_spec">above</seealso>.</p></desc>
     </datatype>
     <datatype>
       <name name="mfargs"/>
@@ -231,6 +263,12 @@ child_spec() = {Id,StartFunc,Restart,Shutdown,Type,Modules}
     </datatype>
     <datatype>
       <name name="strategy"/>
+    </datatype>
+    <datatype>
+      <name name="sup_flags"/>
+      <desc><p>The tuple format is kept for backwards compatibility
+	 only. A map is preferred as defined
+	 <seealso marker="#sup_flags">above</seealso>.</p></desc>
     </datatype>
     <datatype>
       <name name="sup_ref"/>
@@ -264,9 +302,9 @@ child_spec() = {Id,StartFunc,Restart,Shutdown,Type,Modules}
           globally as <c>Name</c> using <c>global:register_name/2</c>. If
           <c><anno>SupName</anno>={via,<anno>Module</anno>,<anno>Name</anno>}</c> the supervisor
 	  is registered as <c>Name</c> using the registry represented by
-	  <c>Module</c>. The <c>Module</c> callback should export the functions
+	  <c>Module</c>. The <c>Module</c> callback must export the functions
 	  <c>register_name/2</c>, <c>unregister_name/1</c> and <c>send/2</c>,
-	  which should behave like the corresponding functions in <c>global</c>.
+	  which shall behave like the corresponding functions in <c>global</c>.
 	  Thus, <c>{via,global,<anno>Name</anno>}</c> is a valid reference.</p>
           <p>If no name is provided, the supervisor is not registered.</p>
         <p><c><anno>Module</anno></c> is the name of the callback module.</p>
@@ -297,7 +335,6 @@ child_spec() = {Id,StartFunc,Restart,Shutdown,Type,Modules}
     <func>
       <name name="start_child" arity="2"/>
       <fsummary>Dynamically add a child process to a supervisor.</fsummary>
-      <type name="child_spec"/>
       <type name="startchild_ret"/>
       <type name="startchild_err"/>
       <desc>
@@ -314,21 +351,21 @@ child_spec() = {Id,StartFunc,Restart,Shutdown,Type,Modules}
           <item><c>{via,Module,Name}</c>, if the supervisor is registered
 	  through an alternative process registry.</item>
         </list>
-        <p><c><anno>ChildSpec</anno></c> should be a valid child specification
+        <p><c><anno>ChildSpec</anno></c> must be a valid child specification
           (unless the supervisor is a <c>simple_one_for_one</c>
           supervisor, see below). The child process will be started by
           using the start function as defined in the child
           specification.</p>
         <p>If the case of a <c>simple_one_for_one</c> supervisor,
           the child specification defined in <c>Module:init/1</c> will
-          be used and <c><anno>ChildSpec</anno></c> should instead be an arbitrary
+          be used and <c><anno>ChildSpec</anno></c> shall instead be an arbitrary
           list of terms <c><anno>List</anno></c>. The child process will then be
           started by appending <c><anno>List</anno></c> to the existing start
           function arguments, i.e. by calling
           <c>apply(M, F, A++<anno>List</anno>)</c> where <c>{M,F,A}</c> is the start
           function defined in the child specification.</p>
         <p>If there already exists a child specification with
-          the specified <c><anno>Id</anno></c>, <c><anno>ChildSpec</anno></c> is discarded and
+          the specified name, <c><anno>ChildSpec</anno></c> is discarded and
           the function returns <c>{error,already_present}</c> or
           <c>{error,{already_started,<anno>Child</anno>}}</c>, depending on if
           the corresponding child process is running or not.</p>
@@ -511,11 +548,20 @@ child_spec() = {Id,StartFunc,Restart,Shutdown,Type,Modules}
           correct, or <c>{error,<anno>Error</anno>}</c> otherwise.</p>
       </desc>
     </func>
+    <func>
+      <name name="get_childspec" arity="2"/>
+      <fsummary>Return the child spec map for the given child.</fsummary>
+      <desc>
+        <p>Returns the child spec map for the child identified
+          by <c>Id</c> under supervisor <c>SupRef</c>. The returned
+          map contains all keys, both mandatory and optional.</p>
+      </desc>
+    </func>
   </funcs>
 
   <section>
     <title>CALLBACK FUNCTIONS</title>
-    <p>The following functions should be exported from a
+    <p>The following functions must be exported from a
       <c>supervisor</c> callback module.</p>
   </section>
   <funcs>
@@ -524,10 +570,8 @@ child_spec() = {Id,StartFunc,Restart,Shutdown,Type,Modules}
       <fsummary>Return a supervisor specification.</fsummary>
       <type>
         <v>Args = term()</v>
-        <v>Result = {ok,{{RestartStrategy,MaxR,MaxT},[ChildSpec]}} | ignore</v>
-        <v>&nbsp;RestartStrategy = <seealso marker="#type-strategy">strategy()</seealso></v>
-        <v>&nbsp;MaxR = integer()>=0</v>
-        <v>&nbsp;MaxT = integer()>0</v>
+        <v>Result = {ok,{SupFlags,[ChildSpec]}} | ignore</v>
+        <v>&nbsp;SupFlags = <seealso marker="#type-sup_flags">sup_flags()</seealso></v>
         <v>&nbsp;ChildSpec = <seealso marker="#type-child_spec">child_spec()</seealso></v>
       </type>
       <desc>
@@ -537,20 +581,26 @@ child_spec() = {Id,StartFunc,Restart,Shutdown,Type,Modules}
           restart frequency and child specifications.</p>
         <p><c>Args</c> is the <c>Args</c> argument provided to the start
           function.</p>
-        <p><c>RestartStrategy</c> is the restart strategy and
-          <c>MaxR</c> and <c>MaxT</c> defines the maximum restart
-          frequency of the supervisor. <c>[ChildSpec]</c> is a list of
-          valid child specifications defining which child processes
-          the supervisor should start and monitor. See the discussion
-          about Supervision Principles above.</p>
+        <p><c>SupFlags</c> is the supervisor flags defining the
+          restart strategy and max restart frequency for the
+          supervisor. <c>[ChildSpec]</c> is a list of valid child
+          specifications defining which child processes the supervisor
+          shall start and monitor. See the discussion about
+          Supervision Principles above.</p>
         <p>Note that when the restart strategy is
           <c>simple_one_for_one</c>, the list of child specifications
           must be a list with one child specification only.
-          (The <c>Id</c> is ignored). No child process is then started
+          (The name is ignored). No child process is then started
           during the initialization phase, but all children are assumed
           to be started dynamically using
           <c>supervisor:start_child/2</c>.</p>
         <p>The function may also return <c>ignore</c>.</p>
+	<p>Note that this function might also be called as a part of a
+	  code upgrade procedure. For this reason, the function should
+	  preferably not have any side effects. See
+	  <seealso marker="doc/design_principles:appup_cookbook#sup">Design
+	  Principles</seealso> for more information about code upgrade
+	  of supervisors.</p>
       </desc>
     </func>
   </funcs>
