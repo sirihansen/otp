@@ -39,6 +39,9 @@
 -export([id/1]).
 -export([init/2]).
 
+-export([post_all/3]).
+-export([post_groups/2]).
+
 -export([pre_init_per_suite/3]).
 -export([post_init_per_suite/4]).
 -export([pre_end_per_suite/3]).
@@ -71,11 +74,38 @@
 
 -record(state, { id = ?MODULE :: term()}).
 
+%% @doc Called after groups/0.
+%% you can change the return value in this function.
+-spec post_groups(Suite :: atom(), Groups :: list()) -> list().
+post_groups(Suite,Groups) ->
+    gen_event:notify(
+      ?CT_EVMGR_REF, #event{ name = cth, node = node(),
+			     data = {?MODULE, post_groups,
+				     [Suite,Groups]}}),
+    ct:log("~w:post_groups(~w) called", [?MODULE,Suite]),
+    Groups.
+
+%% @doc Called after all/0.
+%% you can change the return value in this function.
+-spec post_all(Suite :: atom(),
+               Tests :: list(),
+               Groups :: term()) ->
+    list().
+post_all(Suite,Tests,Groups) ->
+    erlang:display(notifying_post_all),
+    gen_event:notify(
+      ?CT_EVMGR_REF, #event{ name = cth, node = node(),
+			     data = {?MODULE, post_all,
+				     [Suite,Tests,Groups]}}),
+    ct:log("~w:post_all(~w) called", [?MODULE,Suite]),
+    Tests.
+
 %% @doc Always called before any other callback function. Use this to initiate
 %% any common state. It should return an state for this CTH.
 -spec init(Id :: term(), Opts :: proplists:proplist()) ->
     {ok, State :: #state{}}.
 init(Id, Opts) ->
+    erlang:display(nint),
     gen_event:notify(?CT_EVMGR_REF, #event{ name = cth, node = node(),
 					    data = {?MODULE, init, [Id, Opts]}}),
     ct:log("~w:init called", [?MODULE]),

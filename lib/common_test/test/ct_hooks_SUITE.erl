@@ -73,6 +73,8 @@ all() ->
 all(suite) ->
     lists:reverse(
       [
+       crash_groups, crash_all, bad_return_groups, bad_return_all,
+       illegal_values_groups, illegal_values_all, alter_groups, alter_all,
        one_cth, two_cth, faulty_cth_no_init, faulty_cth_id_no_init,
        faulty_cth_exit_in_init, faulty_cth_exit_in_id,
        faulty_cth_exit_in_init_scope_suite, minimal_cth,
@@ -299,9 +301,60 @@ repeat_force_stop(Config) ->
             [{force_stop,skip_rest},{duration,"000009"}]).
 
 %% Test that expected callbacks, and only those, are called when a test
-%% are fails due to clash in config alias names
+%% fails due to clash in config alias names
 config_clash(Config) ->
     do_test(config_clash, "config_clash_SUITE.erl", [skip_cth], Config).
+
+%% Test post_groups and post_all hook callbacks, introduced by OTP-14746
+alter_groups(Config) ->
+    CfgFile = gen_config(?FUNCTION_NAME,
+                         [{groups_return,[{new_group,[tc1,tc2]}]},
+                          {all_return,[{group,new_group}]}],Config),
+    do_test(?FUNCTION_NAME, "all_and_groups_SUITE.erl", [all_and_groups_cth],
+            Config, ok, 2, [{config,CfgFile}]).
+
+alter_all(Config) ->
+    CfgFile = gen_config(?FUNCTION_NAME,[{all_return,[tc2]}],Config),
+    do_test(?FUNCTION_NAME, "all_and_groups_SUITE.erl", [all_and_groups_cth],
+            Config, ok, 2, [{config,CfgFile}]).
+
+bad_return_groups(Config) ->
+    CfgFile = gen_config(?FUNCTION_NAME,[{groups_return,not_a_list}],
+                         Config),
+    do_test(?FUNCTION_NAME, "all_and_groups_SUITE.erl", [all_and_groups_cth],
+            Config, ok, 2, [{config,CfgFile}]).
+
+bad_return_all(Config) ->
+    CfgFile = gen_config(?FUNCTION_NAME,[{all_return,not_a_list}],
+                         Config),
+    do_test(?FUNCTION_NAME, "all_and_groups_SUITE.erl", [all_and_groups_cth],
+            Config, ok, 2, [{config,CfgFile}]).
+
+illegal_values_groups(Config) ->
+    CfgFile = gen_config(?FUNCTION_NAME,
+                         [{groups_return,[{new_group,[this_test_does_not_exist]},
+                                          this_is_not_a_group_def]}],
+                         Config),
+    do_test(?FUNCTION_NAME, "all_and_groups_SUITE.erl", [all_and_groups_cth],
+            Config, ok, 2, [{config,CfgFile}]).
+
+illegal_values_all(Config) ->
+    CfgFile = gen_config(?FUNCTION_NAME,
+                         [{all_return,[{group,this_group_does_not_exist},
+                                       {this_is_not_a_valid_term}]}],
+                         Config),
+    do_test(?FUNCTION_NAME, "all_and_groups_SUITE.erl", [all_and_groups_cth],
+            Config, ok, 2, [{config,CfgFile}]).
+
+crash_groups(Config) ->
+    CfgFile = gen_config(?FUNCTION_NAME,[{groups_return,crash}],Config),
+    do_test(?FUNCTION_NAME, "all_and_groups_SUITE.erl", [all_and_groups_cth],
+            Config, ok, 2, [{config,CfgFile}]).
+
+crash_all(Config) ->
+    CfgFile = gen_config(?FUNCTION_NAME,[{all_return,crash}],Config),
+    do_test(?FUNCTION_NAME, "all_and_groups_SUITE.erl", [all_and_groups_cth],
+            Config, ok, 2, [{config,CfgFile}]).
 
 %%%-----------------------------------------------------------------
 %%% HELP FUNCTIONS
@@ -347,6 +400,13 @@ reformat(Events, EH) ->
 %reformat(Events, _EH) ->
 %    Events.
 
+gen_config(Name,KeyVals,Config) ->
+    PrivDir = ?config(priv_dir,Config),
+    File = filename:join(PrivDir,atom_to_list(Name)++".cfg"),
+    ok = file:write_file(File,[io_lib:format("~p.~n",[{Key,Value}])
+                               || {Key,Value} <- KeyVals]),
+    File.
+
 %%%-----------------------------------------------------------------
 %%% TEST EVENTS
 %%%-----------------------------------------------------------------
@@ -365,13 +425,16 @@ test_events(one_empty_cth) ->
      {?eh,test_start,{'DEF',{'START_TIME','LOGDIR'}}},
      {?eh,cth,{empty_cth,id,[[]]}},
      {?eh,cth,{empty_cth,init,[{'_','_','_'},[]]}},
+     %% check that post_groups and post_all comes after init when hook
+     %% is installed with start flag/option.
+     {?eh,cth,{empty_cth,post_groups,[ct_cth_empty_SUITE,[]]}},
+     {?eh,cth,{empty_cth,post_all,[ct_cth_empty_SUITE,[test_case],[]]}},
      {?eh,tc_start,{ct_cth_empty_SUITE,init_per_suite}},
      {?eh,cth,{empty_cth,pre_init_per_suite,
 	       [ct_cth_empty_SUITE,'$proplist',[]]}},
      {?eh,cth,{empty_cth,post_init_per_suite,
 	       [ct_cth_empty_SUITE,'$proplist','$proplist',[]]}},
      {?eh,tc_done,{ct_cth_empty_SUITE,init_per_suite,ok}},
-
      {?eh,tc_start,{ct_cth_empty_SUITE,test_case}},
      {?eh,cth,{empty_cth,pre_init_per_testcase,[ct_cth_empty_SUITE,test_case,'$proplist',[]]}},
      {?eh,cth,{empty_cth,post_init_per_testcase,[ct_cth_empty_SUITE,test_case,'$proplist','_',[]]}},
@@ -580,6 +643,10 @@ test_events(scope_suite_cth) ->
     [
      {?eh,start_logging,{'DEF','RUNDIR'}},
      {?eh,test_start,{'DEF',{'START_TIME','LOGDIR'}}},
+     %% check that post_groups and post_all comes before init when hook
+     %% is installed in suite/0
+     {?eh,cth,{'_',post_groups,['_',[]]}},
+     {?eh,cth,{'_',post_all,['_','_',[]]}},
      {?eh,tc_start,{ct_scope_suite_cth_SUITE,init_per_suite}},
      {?eh,cth,{'_',id,[[]]}},
      {?eh,cth,{'_',init,['_',[]]}},
@@ -2307,6 +2374,184 @@ test_events(config_clash) ->
     ],
     %% Make sure no 'cth_error' events are received!
     [{negative,{?eh,cth_error,'_'},E} || E <- Events];
+
+test_events(alter_groups) ->
+    [
+     {?eh,start_logging,{'DEF','RUNDIR'}},
+     {?eh,test_start,{'DEF',{'START_TIME','LOGDIR'}}},
+     {?eh,cth,{empty_cth,id,[[]]}},
+     {?eh,cth,{empty_cth,init,[{'_','_','_'},[]]}},
+     {?eh,cth,{empty_cth,post_groups,[all_and_groups_SUITE,
+                                      [{new_group,[tc1,tc2]}]]}},
+     {?eh,cth,{empty_cth,post_all,[all_and_groups_SUITE,[{group,new_group}],
+                                   [{new_group,[tc1,tc2]}]]}},
+     {?eh,start_info,{1,1,2}},
+     {?eh,cth,{empty_cth,post_groups,[all_and_groups_SUITE,
+                                      [{new_group,[tc1,tc2]}]]}},
+     {?eh,cth,{empty_cth,post_all,[all_and_groups_SUITE,[{group,new_group}],
+                                   [{new_group,[tc1,tc2]}]]}},
+     {?eh,tc_start,{all_and_groups_SUITE,{init_per_group,new_group,[]}}},
+     {?eh,tc_done,{all_and_groups_SUITE,
+                   {init_per_group,new_group,'$proplist'},ok}},
+     {?eh,tc_start,{all_and_groups_SUITE,tc1}},
+     {?eh,tc_done,{all_and_groups_SUITE,tc1,ok}},
+     {?eh,tc_start,{all_and_groups_SUITE,tc2}},
+     {?eh,tc_done,{all_and_groups_SUITE,tc2,ok}},
+     {?eh,tc_start,{all_and_groups_SUITE,{end_per_group,new_group,[]}}},
+     {?eh,tc_done,{all_and_groups_SUITE,
+                   {end_per_group,new_group,'$proplist'},ok}},
+     {?eh,test_done,{'DEF','STOP_TIME'}},
+     {?eh,cth,{empty_cth,terminate,[[]]}},
+     {?eh,stop_logging,[]}
+    ];
+
+test_events(alter_all) ->
+    [
+     {?eh,start_logging,{'DEF','RUNDIR'}},
+     {?eh,test_start,{'DEF',{'START_TIME','LOGDIR'}}},
+     {?eh,cth,{empty_cth,id,[[]]}},
+     {?eh,cth,{empty_cth,init,[{'_','_','_'},[]]}},
+     {?eh,cth,{empty_cth,post_groups,[all_and_groups_SUITE,
+                                      [{test_group,[tc1]}]]}},
+     {?eh,cth,{empty_cth,post_all,[all_and_groups_SUITE,[tc2],
+                                   [{test_group,[tc1]}]]}},
+     {?eh,start_info,{1,1,1}},
+     {?eh,cth,{empty_cth,post_groups,[all_and_groups_SUITE,'_']}},
+     {?eh,cth,{empty_cth,post_all,[all_and_groups_SUITE,[tc2],'_']}},
+     {?eh,tc_start,{all_and_groups_SUITE,tc2}},
+     {?eh,tc_done,{all_and_groups_SUITE,tc2,ok}},
+     {?eh,test_done,{'DEF','STOP_TIME'}},
+     {?eh,cth,{empty_cth,terminate,[[]]}},
+     {?eh,stop_logging,[]}
+    ];
+
+test_events(illegal_values_groups) ->
+    [
+     {?eh,start_logging,{'DEF','RUNDIR'}},
+     {?eh,test_start,{'DEF',{'START_TIME','LOGDIR'}}},
+     {?eh,cth,{empty_cth,id,[[]]}},
+     {?eh,cth,{empty_cth,init,[{'_','_','_'},[]]}},
+     {?eh,cth,{empty_cth,post_groups,
+               [all_and_groups_SUITE,
+                [{new_group,[this_test_does_not_exist]},
+                 this_is_not_a_group_def]]}},
+     {?eh,start_info,{1,0,0}},
+     {?eh,cth,{empty_cth,post_groups,
+               [all_and_groups_SUITE,
+                [{new_group,[this_test_does_not_exist]},
+                 this_is_not_a_group_def]]}},
+     {?eh,tc_start,{ct_framework,error_in_suite}},
+     {?eh,tc_done,{ct_framework,error_in_suite,{failed,{error,'_'}}}},
+     {?eh,test_done,{'DEF','STOP_TIME'}},
+     {?eh,cth,{empty_cth,terminate,[[]]}},
+     {?eh,stop_logging,[]}
+    ];
+
+test_events(illegal_values_all) ->
+    [
+     {?eh,start_logging,{'DEF','RUNDIR'}},
+     {?eh,test_start,{'DEF',{'START_TIME','LOGDIR'}}},
+     {?eh,cth,{empty_cth,id,[[]]}},
+     {?eh,cth,{empty_cth,init,[{'_','_','_'},[]]}},
+     {?eh,cth,{empty_cth,post_groups,[all_and_groups_SUITE,'_']}},
+     {?eh,cth,{empty_cth,post_all,
+               [all_and_groups_SUITE,
+                [{group,this_group_does_not_exist},
+                 {this_is_not_a_valid_term}],'_']}},
+     {?eh,start_info,{1,0,0}},
+     {?eh,cth,{empty_cth,post_groups,[all_and_groups_SUITE,'_']}},
+     {?eh,cth,{empty_cth,post_all,
+               [all_and_groups_SUITE,
+                [{group,this_group_does_not_exist},
+                 {this_is_not_a_valid_term}],'_']}},
+     {?eh,tc_start,{ct_framework,error_in_suite}},
+     {?eh,tc_done,
+      {ct_framework,error_in_suite,
+       {failed,
+        {error,'Invalid reference to group this_group_does_not_exist in all_and_groups_SUITE:all/0'}}}},
+     {?eh,test_done,{'DEF','STOP_TIME'}},
+     {?eh,cth,{empty_cth,terminate,[[]]}},
+     {?eh,stop_logging,[]}
+    ];
+
+test_events(bad_return_groups) ->
+    [
+     {?eh,start_logging,{'DEF','RUNDIR'}},
+     {?eh,test_start,{'DEF',{'START_TIME','LOGDIR'}}},
+     {?eh,cth,{empty_cth,id,[[]]}},
+     {?eh,cth,{empty_cth,init,[{'_','_','_'},[]]}},
+     {?eh,cth,{empty_cth,post_groups,[all_and_groups_SUITE,not_a_list]}},
+     {?eh,start_info,{1,0,0}},
+     {?eh,cth,{empty_cth,post_groups,[all_and_groups_SUITE,not_a_list]}},
+     {?eh,tc_start,{ct_framework,error_in_suite}},
+     {?eh,tc_done,
+      {ct_framework,error_in_suite,
+       {failed,
+        {error,
+         {'Bad return value from post_groups/2 hook function',not_a_list}}}}},
+     {?eh,test_done,{'DEF','STOP_TIME'}},
+     {?eh,cth,{empty_cth,terminate,[[]]}},
+     {?eh,stop_logging,[]}
+    ];
+
+test_events(bad_return_all) ->
+    [
+     {?eh,start_logging,{'DEF','RUNDIR'}},
+     {?eh,test_start,{'DEF',{'START_TIME','LOGDIR'}}},
+     {?eh,cth,{empty_cth,id,[[]]}},
+     {?eh,cth,{empty_cth,init,[{'_','_','_'},[]]}},
+     {?eh,cth,{empty_cth,post_groups,[all_and_groups_SUITE,'_']}},
+     {?eh,cth,{empty_cth,post_all,[all_and_groups_SUITE,not_a_list,'_']}},
+     {?eh,start_info,{1,0,0}},
+     {?eh,cth,{empty_cth,post_groups,[all_and_groups_SUITE,'_']}},
+     {?eh,cth,{empty_cth,post_all,[all_and_groups_SUITE,not_a_list,'_']}},
+     {?eh,tc_start,{ct_framework,error_in_suite}},
+     {?eh,tc_done,
+      {ct_framework,error_in_suite,
+       {failed,
+        {error,{'Bad return value from post_all/3 hook function',not_a_list}}}}},
+     {?eh,test_done,{'DEF','STOP_TIME'}},
+     {?eh,cth,{empty_cth,terminate,[[]]}},
+     {?eh,stop_logging,[]}
+    ];
+
+test_events(crash_groups) ->
+    [
+     {?eh,start_logging,{'DEF','RUNDIR'}},
+     {?eh,test_start,{'DEF',{'START_TIME','LOGDIR'}}},
+     {?eh,cth,{empty_cth,id,[[]]}},
+     {?eh,cth,{empty_cth,init,[{'_','_','_'},[]]}},
+     {?eh,cth,{empty_cth,post_groups,[all_and_groups_SUITE,crash]}},
+     {?eh,start_info,{1,0,0}},
+     {?eh,cth,{empty_cth,post_groups,[all_and_groups_SUITE,crash]}},
+     {?eh,tc_start,{ct_framework,error_in_suite}},
+     {?eh,tc_done,{ct_framework,error_in_suite,
+                   {failed,
+                    {error,"all_and_groups_cth:post_groups/2 CTH call failed"}}}},
+     {?eh,test_done,{'DEF','STOP_TIME'}},
+     {?eh,cth,{empty_cth,terminate,[[]]}},
+     {?eh,stop_logging,[]}
+    ];
+
+test_events(crash_all) ->
+    [
+     {?eh,start_logging,{'DEF','RUNDIR'}},
+     {?eh,test_start,{'DEF',{'START_TIME','LOGDIR'}}},
+     {?eh,cth,{empty_cth,id,[[]]}},
+     {?eh,cth,{empty_cth,init,[{'_','_','_'},[]]}},
+     {?eh,cth,{empty_cth,post_groups,[all_and_groups_SUITE,'_']}},
+     {?eh,cth,{empty_cth,post_all,[all_and_groups_SUITE,crash,'_']}},
+     {?eh,start_info,{1,0,0}},
+     {?eh,cth,{empty_cth,post_groups,[all_and_groups_SUITE,'_']}},
+     {?eh,cth,{empty_cth,post_all,[all_and_groups_SUITE,crash,'_']}},
+     {?eh,tc_start,{ct_framework,error_in_suite}},
+     {?eh,tc_done,{ct_framework,error_in_suite,
+                   {failed,
+                    {error,"all_and_groups_cth:post_all/3 CTH call failed"}}}},
+     {?eh,test_done,{'DEF','STOP_TIME'}},
+     {?eh,cth,{empty_cth,terminate,[[]]}},
+     {?eh,stop_logging,[]}
+    ];
 
 test_events(ok) ->
     ok.
