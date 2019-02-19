@@ -1,7 +1,7 @@
 %%
 %% %CopyrightBegin%
 %% 
-%% Copyright Ericsson AB 1996-2018. All Rights Reserved.
+%% Copyright Ericsson AB 1996-2019. All Rights Reserved.
 %% 
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -451,8 +451,9 @@ system_time_to_rfc3339(Time, Options) ->
     DateTime = system_time_to_datetime(Secs),
     {{Year, Month, Day}, {Hour, Min, Sec}} = DateTime,
     FractionStr = fraction_str(Factor, AdjustedTime),
-    flat_fwrite("~4.10.0B-~2.10.0B-~2.10.0B~c~2.10.0B:~2.10.0B:~2.10.0B~s~s",
-                [Year, Month, Day, T, Hour, Min, Sec, FractionStr, Offset]).
+    L = [pad4(Year), "-", pad2(Month), "-", pad2(Day), [T],
+         pad2(Hour), ":", pad2(Min), ":", pad2(Sec), FractionStr, Offset],
+    lists:append(L).
 
 %% time_difference(T1, T2) = Tdiff
 %%
@@ -663,7 +664,7 @@ offset(OffsetOption, Secs0) when OffsetOption =:= "";
     Secs = abs(Secs0),
     Hour = Secs div 3600,
     Min = (Secs rem 3600) div 60,
-    io_lib:fwrite("~c~2.10.0B:~2.10.0B", [Sign, Hour, Min]);
+    [Sign | lists:append([pad2(Hour), ":", pad2(Min)])];
 offset(OffsetOption, _Secs) ->
     OffsetOption.
 
@@ -697,7 +698,8 @@ fraction_str(1, _Time) ->
     "";
 fraction_str(Factor, Time) ->
     Fraction = Time rem Factor,
-    io_lib:fwrite(".~*..0B", [log10(Factor), abs(Fraction)]).
+    S = integer_to_list(abs(Fraction)),
+    [$. | pad(log10(Factor) - length(S), S)].
 
 fraction(second, _) ->
     0;
@@ -718,5 +720,21 @@ log10(1000) -> 3;
 log10(1000000) -> 6;
 log10(1000000000) -> 9.
 
-flat_fwrite(F, S) ->
-    lists:flatten(io_lib:fwrite(F, S)).
+pad(0, S) ->
+    S;
+pad(I, S) ->
+    [$0 | pad(I - 1, S)].
+
+pad2(N) when N < 10 ->
+    [$0 | integer_to_list(N)];
+pad2(N) ->
+    integer_to_list(N).
+
+pad4(N) when N < 10 ->
+    [$0, $0, $0 | integer_to_list(N)];
+pad4(N) when N < 100 ->
+    [$0, $0 | integer_to_list(N)];
+pad4(N) when N < 1000 ->
+    [$0 | integer_to_list(N)];
+pad4(N) ->
+    integer_to_list(N).
