@@ -738,7 +738,7 @@ printable_list(L, _D, T, _Uni) when T < 0->
     io_lib:printable_list(L).
 
 slice(L, N) ->
-    try io_lib:chars_length(L) =< N of
+    try has_at_most_n_chars(L, N) of
         true ->
             all;
         false ->
@@ -750,6 +750,13 @@ slice(L, N) ->
             end
     catch _:_ -> false
     end.
+
+has_at_most_n_chars([_ | _], 0) ->
+    false;
+has_at_most_n_chars([], _N) ->
+    true;
+has_at_most_n_chars([_ | L], N) ->
+    has_at_most_n_chars(L, N - 1).
 
 printable_bin0(Bin, D, T, Enc) ->
     Len = case D >= 0 of
