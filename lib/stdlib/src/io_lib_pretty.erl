@@ -751,11 +751,11 @@ slice(L, N) ->
     catch _:_ -> false
     end.
 
-has_at_most_n_chars([_ | _], 0) ->
+has_at_most_n_chars([C | _], 0) when is_integer(C) ->
     false;
 has_at_most_n_chars([], _N) ->
     true;
-has_at_most_n_chars([_ | L], N) ->
+has_at_most_n_chars([C | L], N) when is_integer(C) ->
     has_at_most_n_chars(L, N - 1).
 
 printable_bin0(Bin, D, T, Enc) ->
