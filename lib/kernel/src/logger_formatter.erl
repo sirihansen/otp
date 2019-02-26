@@ -75,7 +75,11 @@ format(#{level:=Level,msg:=Msg0,meta:=Meta},Config0)
                     true ->
                         %% Trim leading and trailing whitespaces, and replace
                         %% newlines with ", "
-                        re:replace(string:trim(MsgStr0),",?\r?\n\s*",", ",
+                        T = lists:reverse(
+                              trim(
+                                lists:reverse(
+                                  trim(MsgStr0,false)),true)),
+                        re:replace(T,",?\r?\n\s*",", ",
                                    [{return,list},global,unicode]);
                     _false ->
                         MsgStr0
@@ -84,6 +88,25 @@ format(#{level:=Level,msg:=Msg0,meta:=Meta},Config0)
                 ""
         end,
     truncate([B,MsgStr,A],maps:get(max_size,Config)).
+
+trim([H|T],Rev) when H==$\s; H==$\r; H==$\n ->
+    trim(T,Rev);
+trim([H|T],false) when is_list(H) ->
+    case trim(H,false) of
+        [] ->
+            trim(T,false);
+        TrimmedH ->
+            [TrimmedH|T]
+    end;
+trim([H|T],true) when is_list(H) ->
+    case trim(lists:reverse(H),true) of
+        [] ->
+            trim(T,true);
+        TrimmedH ->
+            [lists:reverse(TrimmedH)|T]
+    end;
+trim(String,_) ->
+    String.
 
 do_format(Level,Data,[level|Format],Config) ->
     [to_string(level,Level,Config)|do_format(Level,Data,Format,Config)];
