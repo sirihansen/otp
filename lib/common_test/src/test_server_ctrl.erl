@@ -3503,9 +3503,12 @@ modify_cases_upto1(Ref, {skip,Reason,_,Mode,SkipType}=Op,
                    [{repeat,{_M,_F}=MF,_Repeat}|T], Orig, Alt) ->
     modify_cases_upto1(Ref, Op, T, Orig, [{SkipType,{MF,Reason},Mode}|Alt]);
 
-%% next is some other case, ignore or copy
-%% modify_cases_upto1(Ref, {skip,_,_,_,_}=Op, [_Other|T], Orig, Alt) ->
-%%     modify_cases_upto1(Ref, Op, T, Orig, Alt);
+%% next is an already skipped case, ignore or copy
+modify_cases_upto1(Ref, {skip,_,_,_,_}=Op, [{SkipType,_,_}|T], Orig, Alt)
+  when SkipType=:=skip_case; SkipType=:=auto_skip_case ->
+    modify_cases_upto1(Ref, Op, T, Orig, Alt);
+
+%% next is some other case, mark as skipped or copy
 modify_cases_upto1(Ref, {skip,Reason,_,Mode,SkipType}=Op, [Other|T], Orig, Alt) ->
     modify_cases_upto1(Ref, Op, T, Orig, [{SkipType,{Other,Reason},Mode}|Alt]);
 modify_cases_upto1(Ref, CopyOp, [C|T], Orig, Alt) ->
