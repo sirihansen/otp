@@ -1055,7 +1055,7 @@ group_or_func(Func, _Config) ->
 %%%      should be returned. 
 
 get_suite(Mod, all) ->
-    case safe_apply_groups_0(Mod,[]) of
+    case safe_apply_groups_0(Mod,{ok,[]}) of
         {ok,GroupDefs} ->
             try ct_groups:find_groups(Mod, all, all, GroupDefs) of
                 ConfTests when is_list(ConfTests) ->
@@ -1099,7 +1099,7 @@ get_suite(Mod, all) ->
 
 %% group
 get_suite(Mod, Group={conf,Props,_Init,TCs,_End}) ->
-    case safe_apply_groups_0(Mod,[Group]) of
+    case safe_apply_groups_0(Mod,{ok,[Group]}) of
         {ok,GroupDefs} ->
             Name = ?val(name, Props),
             try ct_groups:find_groups(Mod, Name, TCs, GroupDefs) of
@@ -1226,7 +1226,7 @@ get_all(Mod, ConfTests) ->
                     non_existing ->
                         list_to_atom(
                           atom_to_list(Mod)++
-                              " can not be compiled or loaded");
+                              " cannot be compiled or loaded");
                     _ ->
                         list_to_atom(
                           atom_to_list(Mod)++":all/0 is missing")
@@ -1644,7 +1644,7 @@ safe_apply_all_0(Mod) ->
             {error,{bad_return,Bad}}
     catch
         _:Reason ->
-            handle_callback_crash(Reason,erlang:get_stacktrace(),Mod,all,[])
+            handle_callback_crash(Reason,erlang:get_stacktrace(),Mod,all,{error,undef})
     end.
 
 safe_apply_groups_0(Mod,Default) ->
@@ -1669,7 +1669,7 @@ safe_apply_groups_0(Mod,Default) ->
 handle_callback_crash(undef,[{Mod,Func,[],_}|_],Mod,Func,Default) ->
     case ct_hooks:Func(Mod, []) of
         [] ->
-            {ok,Default};
+            Default;
         List when is_list(List) ->
             {ok,List};
         {fail,Reason} ->
