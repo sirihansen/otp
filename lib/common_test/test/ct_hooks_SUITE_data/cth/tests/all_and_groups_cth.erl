@@ -40,13 +40,13 @@ id(Opts) ->
     empty_cth:id(Opts).
 
 post_groups(Suite,Groups) ->
-    case empty_cth:post_groups(Suite,ct:get_config(groups_return,Groups)) of
+    case empty_cth:post_groups(Suite,ct:get_config(post_groups_return,Groups)) of
         crash -> error(crash_in_post_groups);
         R -> R
     end.
 
 post_all(Suite,Tests,Groups) ->
-    case empty_cth:post_all(Suite,ct:get_config(all_return,Tests),Groups) of
+    case empty_cth:post_all(Suite,ct:get_config(post_all_return,Tests),Groups) of
         crash -> error(crash_in_post_all);
         R -> R
     end.

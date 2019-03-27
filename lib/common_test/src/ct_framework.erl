@@ -1627,24 +1627,29 @@ safe_apply_all_0(Mod) ->
         AllTCs0 when is_list(AllTCs0) ->
 	    try save_seqs(Mod,AllTCs0) of
 		SeqsAndTCs when is_list(SeqsAndTCs) ->
-                    case ct_hooks:all(Mod, SeqsAndTCs) of
-                        AllTCs when is_list(AllTCs) ->
-                            {ok,AllTCs};
-                        {fail,Reason} ->
-                            {error,Reason};
-                        Bad ->
-                            {error,{bad_hook_return,Bad}}
-                    end
+                    all_hook(Mod,SeqsAndTCs)
             catch throw:{error,What} ->
 		    {error,What}
             end;
         {skip,_}=Skip ->
-            Skip;
+            all_hook(Mod,Skip);
         Bad ->
             {error,{bad_return,Bad}}
     catch
         _:Reason ->
             handle_callback_crash(Reason,erlang:get_stacktrace(),Mod,all,{error,undef})
+    end.
+
+all_hook(Mod, All) ->
+    case ct_hooks:all(Mod, All) of
+        AllTCs when is_list(AllTCs) ->
+            {ok,AllTCs};
+        {skip,_}=Skip ->
+            Skip;
+        {fail,Reason} ->
+            {error,Reason};
+        Bad ->
+            {error,{bad_hook_return,Bad}}
     end.
 
 safe_apply_groups_0(Mod,Default) ->

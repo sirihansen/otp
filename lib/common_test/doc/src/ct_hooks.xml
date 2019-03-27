@@ -165,11 +165,12 @@
     </func>
 
     <func>
-      <name>Module:post_all(SuiteName, Tests, GroupDefs) -&gt; NewTests</name>
+      <name>Module:post_all(SuiteName, Return, GroupDefs) -&gt; NewReturn</name>
       <fsummary>Called after all/0.</fsummary>
       <type>
         <v>SuiteName = atom()</v>
-	<v>Tests = NewTests = [TestCase | {testcase,TestCase,TCRepeatProps} | {group,GroupName} | {group,GroupName,Properties} | {group,GroupName,Properties,SubGroups}]</v>
+	<v>Return = NewReturn = Tests | {skip,Reason}</v>
+	<v>Tests = [TestCase | {testcase,TestCase,TCRepeatProps} | {group,GroupName} | {group,GroupName,Properties} | {group,GroupName,Properties,SubGroups}]</v>
 	<v>TestCase = atom()</v>
 	<v>TCRepeatProps = [{repeat,N} | {repeat_until_ok,N} | {repeat_until_fail,N}]</v>
 	<v>GroupName = atom()</v>
@@ -183,6 +184,7 @@
         <v>Group = {GroupName,GroupProperties,GroupsAndTestCases}</v>
         <v>GroupProperties = [parallel | sequence | Shuffle | {GroupRepeatType,N}]</v>
         <v>GroupsAndTestCases = [Group | {group,GroupName} | TestCase]</v>
+	<v>Reason = term()</v>
       </type>
       <desc>
         <p>OPTIONAL</p>
@@ -191,18 +193,20 @@
           <seealso marker="common_test#Module:all-0"><c>all/0</c></seealso>.
 	  It is used to modify the set of test cases and test group to
 	  be executed, for instance to add or remove test cases and
-	  groups or change group properties.</p>
+	  groups, change group properties, or even skip all tests in
+	  the suite.</p>
 
-        <p><c>Tests</c> is what
+        <p><c>Return</c> is what
           <seealso marker="common_test#Module:all-0"><c>all/0</c></seealso>
-          returned, that is, a list of test cases and groups to be executed.</p>
+          returned, that is, a list of test cases and groups to be
+          executed, or a tuple <c>{skip,Reason}</c>.</p>
 
         <p><c>GroupDefs</c> is what
           <seealso marker="common_test#Module:groups-0"><c>groups/0</c></seealso>
           or the <c>post_groups/2</c> hook returned, that is, a list
           of group definitions.</p>
 
-        <p><c>NewTests</c> is the possibly modified version of <c>Tests</c>.</p>
+        <p><c>NewReturn</c> is the possibly modified version of <c>Return</c>.</p>
 
         <p>This function is called only if the CTH is added before
           <c>init_per_suite</c> is run. For details, see section

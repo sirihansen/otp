@@ -34,7 +34,7 @@ end_per_group(_Group,Config) ->
     ok.
 
 all() ->
-    [{group,test_group}].
+    ct:get_config(all_return,[{group,test_group}]).
 
 groups() ->
     [{test_group,[tc1]}].

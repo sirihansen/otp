@@ -75,6 +75,7 @@ all(suite) ->
       [
        crash_groups, crash_all, bad_return_groups, bad_return_all,
        illegal_values_groups, illegal_values_all, alter_groups, alter_all,
+       alter_all_to_skip, alter_all_from_skip,
        one_cth, two_cth, faulty_cth_no_init, faulty_cth_id_no_init,
        faulty_cth_exit_in_init, faulty_cth_exit_in_id,
        faulty_cth_exit_in_init_scope_suite, minimal_cth,
@@ -308,31 +309,44 @@ config_clash(Config) ->
 %% Test post_groups and post_all hook callbacks, introduced by OTP-14746
 alter_groups(Config) ->
     CfgFile = gen_config(?FUNCTION_NAME,
-                         [{groups_return,[{new_group,[tc1,tc2]}]},
-                          {all_return,[{group,new_group}]}],Config),
+                         [{post_groups_return,[{new_group,[tc1,tc2]}]},
+                          {post_all_return,[{group,new_group}]}],Config),
     do_test(?FUNCTION_NAME, "all_and_groups_SUITE.erl", [all_and_groups_cth],
             Config, ok, 2, [{config,CfgFile}]).
 
 alter_all(Config) ->
-    CfgFile = gen_config(?FUNCTION_NAME,[{all_return,[tc2]}],Config),
+    CfgFile = gen_config(?FUNCTION_NAME,[{post_all_return,[tc2]}],Config),
+    do_test(?FUNCTION_NAME, "all_and_groups_SUITE.erl", [all_and_groups_cth],
+            Config, ok, 2, [{config,CfgFile}]).
+
+alter_all_from_skip(Config) ->
+    CfgFile = gen_config(?FUNCTION_NAME,[{all_return,{skip,"skipped by all/0"}},
+                                         {post_all_return,[tc2]}],Config),
+    do_test(?FUNCTION_NAME, "all_and_groups_SUITE.erl", [all_and_groups_cth],
+            Config, ok, 2, [{config,CfgFile}]).
+
+alter_all_to_skip(Config) ->
+    CfgFile = gen_config(?FUNCTION_NAME,
+                         [{post_all_return,{skip,"skipped by post_all/3"}}],
+                         Config),
     do_test(?FUNCTION_NAME, "all_and_groups_SUITE.erl", [all_and_groups_cth],
             Config, ok, 2, [{config,CfgFile}]).
 
 bad_return_groups(Config) ->
-    CfgFile = gen_config(?FUNCTION_NAME,[{groups_return,not_a_list}],
+    CfgFile = gen_config(?FUNCTION_NAME,[{post_groups_return,not_a_list}],
                          Config),
     do_test(?FUNCTION_NAME, "all_and_groups_SUITE.erl", [all_and_groups_cth],
             Config, ok, 2, [{config,CfgFile}]).
 
 bad_return_all(Config) ->
-    CfgFile = gen_config(?FUNCTION_NAME,[{all_return,not_a_list}],
+    CfgFile = gen_config(?FUNCTION_NAME,[{post_all_return,not_a_list}],
                          Config),
     do_test(?FUNCTION_NAME, "all_and_groups_SUITE.erl", [all_and_groups_cth],
             Config, ok, 2, [{config,CfgFile}]).
 
 illegal_values_groups(Config) ->
     CfgFile = gen_config(?FUNCTION_NAME,
-                         [{groups_return,[{new_group,[this_test_does_not_exist]},
+                         [{post_groups_return,[{new_group,[this_test_does_not_exist]},
                                           this_is_not_a_group_def]}],
                          Config),
     do_test(?FUNCTION_NAME, "all_and_groups_SUITE.erl", [all_and_groups_cth],
@@ -340,19 +354,19 @@ illegal_values_groups(Config) ->
 
 illegal_values_all(Config) ->
     CfgFile = gen_config(?FUNCTION_NAME,
-                         [{all_return,[{group,this_group_does_not_exist},
+                         [{post_all_return,[{group,this_group_does_not_exist},
                                        {this_is_not_a_valid_term}]}],
                          Config),
     do_test(?FUNCTION_NAME, "all_and_groups_SUITE.erl", [all_and_groups_cth],
             Config, ok, 2, [{config,CfgFile}]).
 
 crash_groups(Config) ->
-    CfgFile = gen_config(?FUNCTION_NAME,[{groups_return,crash}],Config),
+    CfgFile = gen_config(?FUNCTION_NAME,[{post_groups_return,crash}],Config),
     do_test(?FUNCTION_NAME, "all_and_groups_SUITE.erl", [all_and_groups_cth],
             Config, ok, 2, [{config,CfgFile}]).
 
 crash_all(Config) ->
-    CfgFile = gen_config(?FUNCTION_NAME,[{all_return,crash}],Config),
+    CfgFile = gen_config(?FUNCTION_NAME,[{post_all_return,crash}],Config),
     do_test(?FUNCTION_NAME, "all_and_groups_SUITE.erl", [all_and_groups_cth],
             Config, ok, 2, [{config,CfgFile}]).
 
@@ -2420,6 +2434,51 @@ test_events(alter_all) ->
      {?eh,cth,{empty_cth,post_all,[all_and_groups_SUITE,[tc2],'_']}},
      {?eh,tc_start,{all_and_groups_SUITE,tc2}},
      {?eh,tc_done,{all_and_groups_SUITE,tc2,ok}},
+     {?eh,test_done,{'DEF','STOP_TIME'}},
+     {?eh,cth,{empty_cth,terminate,[[]]}},
+     {?eh,stop_logging,[]}
+    ];
+
+test_events(alter_all_from_skip) ->
+    [
+     {?eh,start_logging,{'DEF','RUNDIR'}},
+     {?eh,test_start,{'DEF',{'START_TIME','LOGDIR'}}},
+     {?eh,cth,{empty_cth,id,[[]]}},
+     {?eh,cth,{empty_cth,init,[{'_','_','_'},[]]}},
+     {?eh,cth,{empty_cth,post_groups,[all_and_groups_SUITE,
+                                      [{test_group,[tc1]}]]}},
+     {?eh,cth,{empty_cth,post_all,[all_and_groups_SUITE,[tc2],
+                                   [{test_group,[tc1]}]]}},
+     {?eh,start_info,{1,1,1}},
+     {?eh,cth,{empty_cth,post_groups,[all_and_groups_SUITE,'_']}},
+     {?eh,cth,{empty_cth,post_all,[all_and_groups_SUITE,[tc2],'_']}},
+     {?eh,tc_start,{all_and_groups_SUITE,tc2}},
+     {?eh,tc_done,{all_and_groups_SUITE,tc2,ok}},
+     {?eh,test_done,{'DEF','STOP_TIME'}},
+     {?eh,cth,{empty_cth,terminate,[[]]}},
+     {?eh,stop_logging,[]}
+    ];
+
+test_events(alter_all_to_skip) ->
+    [
+     {?eh,start_logging,{'DEF','RUNDIR'}},
+     {?eh,test_start,{'DEF',{'START_TIME','LOGDIR'}}},
+     {?eh,cth,{empty_cth,id,[[]]}},
+     {?eh,cth,{empty_cth,init,[{'_','_','_'},[]]}},
+     {?eh,cth,{empty_cth,post_groups,[all_and_groups_SUITE,
+                                      [{test_group,[tc1]}]]}},
+     {?eh,cth,{empty_cth,post_all,[all_and_groups_SUITE,
+                                   {skip,"skipped by post_all/3"},
+                                   [{test_group,[tc1]}]]}},
+     {?eh,start_info,{1,1,0}},
+     {?eh,cth,{empty_cth,post_groups,[all_and_groups_SUITE,'_']}},
+     {?eh,cth,{empty_cth,post_all,[all_and_groups_SUITE,
+                                   {skip,"skipped by post_all/3"},
+                                   '_']}},
+     {?eh,tc_user_skip,{all_and_groups_SUITE,all,"skipped by post_all/3"}},
+     {?eh,cth,{'_',on_tc_skip,[all_and_groups_SUITE,all,
+                               {tc_user_skip,"skipped by post_all/3"},
+                               []]}},
      {?eh,test_done,{'DEF','STOP_TIME'}},
      {?eh,cth,{empty_cth,terminate,[[]]}},
      {?eh,stop_logging,[]}
